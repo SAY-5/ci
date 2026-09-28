@@ -274,3 +274,25 @@ func createService(t *testing.T, client kubernetes.Interface, name string, clust
 		t.Fatal(err)
 	}
 }
+
+func TestParseDNSProgrammingLatencyMetrics(t *testing.T) {
+	m := `# HELP coredns_kubernetes_dns_programming_duration_seconds Histogram of the time (in seconds) it took to program a dns instance.
+# TYPE coredns_kubernetes_dns_programming_duration_seconds histogram
+coredns_kubernetes_dns_programming_duration_seconds_bucket{service_kind="headless_with_selector",le="0.001"} 0
+coredns_kubernetes_dns_programming_duration_seconds_bucket{service_kind="headless_with_selector",le="+Inf"} 2
+coredns_kubernetes_dns_programming_duration_seconds_sum{service_kind="headless_with_selector"} 0.5
+coredns_kubernetes_dns_programming_duration_seconds_count{service_kind="headless_with_selector"} 2
+`
+	tp := expfmt.NewTextParser(model.LegacyValidation)
+	got, err := tp.TextToMetricFamilies(strings.NewReader(m))
+	if err != nil {
+		t.Fatalf("Could not parse metrics: %v", err)
+	}
+	metric := metricByServiceKind(got["coredns_kubernetes_dns_programming_duration_seconds"], "headless_with_selector")
+	if metric == nil {
+		t.Fatal("Did not find headless_with_selector metric")
+	}
+	if c := metric.GetHistogram().GetSampleCount(); c != 2 {
+		t.Errorf("Expected sample count 2, got %d", c)
+	}
+}
